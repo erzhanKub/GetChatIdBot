@@ -1,49 +1,119 @@
-diff --git a/GetChatIdBot/Program.cs b/GetChatIdBot/Program.cs
-index 7799427..cb7c71f 100644
---- a/GetChatIdBot/Program.cs
-+++ b/GetChatIdBot/Program.cs
-@@ -1,7 +1,14 @@
-+using DotNetEnv;
- using GetChatIdBot;
-+using Telegram.Bot;
+diff --git a/GetChatIdBot/ChatIdBot.cs b/GetChatIdBot/ChatIdBot.cs
+index 1f579fd..e6623a1 100644
+--- a/GetChatIdBot/ChatIdBot.cs
++++ b/GetChatIdBot/ChatIdBot.cs
+@@ -1,3 +1,4 @@
++using Microsoft.Extensions.Logging;
+ using Telegram.Bot;
+ using Telegram.Bot.Polling;
+ using Telegram.Bot.Types;
+@@ -5,12 +6,16 @@ using Telegram.Bot.Types.Enums;
  
- var builder = Host.CreateApplicationBuilder(args);
--builder.Services.AddHostedService<Worker>();
-+
-+Env.Load();
-+
-+builder.Services.AddHostedService<ChatIdBot>();
-+builder.Services.AddSingleton<ITelegramBotClient>(new TelegramBotClient(Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN")
-+        ?? throw new ArgumentNullException("Environment variable 'TELEGRAM_BOT_TOKEN' is not set")));
+ namespace GetChatIdBot;
  
- var host = builder.Build();
- host.Run();
-diff --git a/GetChatIdBot/Worker.cs b/GetChatIdBot/Worker.cs
-deleted file mode 100644
-index 01b3821..0000000
---- a/GetChatIdBot/Worker.cs
-+++ /dev/null
-@@ -1,23 +0,0 @@
--namespace GetChatIdBot;
--
--public class Worker : BackgroundService
--{
--    private readonly ILogger<Worker> _logger;
--
--    public Worker(ILogger<Worker> logger)
--    {
--        _logger = logger;
--    }
--
--    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
--    {
--        while (!stoppingToken.IsCancellationRequested)
--        {
--            if (_logger.IsEnabled(LogLevel.Information))
--            {
--                _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+-public sealed class ChatIdBot(ITelegramBotClient telegramBotClient) : BackgroundService
++public sealed class ChatIdBot(ITelegramBotClient telegramBotClient, ILogger<ChatIdBot> logger) : BackgroundService
+ {
+     private readonly ITelegramBotClient _telegramBotClient = telegramBotClient;
++    private readonly ILogger<ChatIdBot> _logger = logger;
+ 
+     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+-        => await StartReceivingUpdatesAsync(stoppingToken);
++    {
++        _logger.LogInformation("ChatIdBot started.");
++        await StartReceivingUpdatesAsync(stoppingToken);
++    }
+ 
+     private async Task StartReceivingUpdatesAsync(CancellationToken cancellationToken)
+     {
+@@ -20,20 +25,22 @@ public sealed class ChatIdBot(ITelegramBotClient telegramBotClient) : Background
+             new ReceiverOptions
+             {
+                 AllowedUpdates = [UpdateType.Message],
 -            }
--            await Task.Delay(1000, stoppingToken);
--        }
--    }
++            },
++            cancellationToken: cancellationToken
+         );
+ 
+         await Task.Delay(-1, cancellationToken);
+     }
+ 
+     public async Task HandleUpdateAsync(
+-    ITelegramBotClient telegramBotClient,
+-    Update update, CancellationToken cancellationToken)
++        ITelegramBotClient telegramBotClient,
++        Update update, CancellationToken cancellationToken)
+     {
+         if (update.Message?.Chat?.Id is null)
+             return;
+ 
+         var chatId = update.Message.Chat.Id;
++        _logger.LogInformation("Received message from chat ID: {ChatId}", chatId);
+ 
+         await _telegramBotClient.SendMessage(
+             chatId, $"Chat ID: `{chatId}`", ParseMode.Markdown, cancellationToken: cancellationToken);
+@@ -41,6 +48,7 @@ public sealed class ChatIdBot(ITelegramBotClient telegramBotClient) : Background
+ 
+     public Task HandleErrorAsync(ITelegramBotClient telegramBotClient, Exception exception, CancellationToken cancellationToken)
+     {
+-        throw new NotImplementedException();
++        _logger.LogError(exception, "An error occurred while receiving updates.");
++        return Task.CompletedTask;
+     }
 -}
++}
+\ No newline at end of file
+diff --git a/diff.txt b/diff.txt
+index bc30a0b..e69de29 100644
+--- a/diff.txt
++++ b/diff.txt
+@@ -1,49 +0,0 @@
+-diff --git a/GetChatIdBot/Program.cs b/GetChatIdBot/Program.cs
+-index 7799427..cb7c71f 100644
+---- a/GetChatIdBot/Program.cs
+-+++ b/GetChatIdBot/Program.cs
+-@@ -1,7 +1,14 @@
+-+using DotNetEnv;
+- using GetChatIdBot;
+-+using Telegram.Bot;
+- 
+- var builder = Host.CreateApplicationBuilder(args);
+--builder.Services.AddHostedService<Worker>();
+-+
+-+Env.Load();
+-+
+-+builder.Services.AddHostedService<ChatIdBot>();
+-+builder.Services.AddSingleton<ITelegramBotClient>(new TelegramBotClient(Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN")
+-+        ?? throw new ArgumentNullException("Environment variable 'TELEGRAM_BOT_TOKEN' is not set")));
+- 
+- var host = builder.Build();
+- host.Run();
+-diff --git a/GetChatIdBot/Worker.cs b/GetChatIdBot/Worker.cs
+-deleted file mode 100644
+-index 01b3821..0000000
+---- a/GetChatIdBot/Worker.cs
+-+++ /dev/null
+-@@ -1,23 +0,0 @@
+--namespace GetChatIdBot;
+--
+--public class Worker : BackgroundService
+--{
+--    private readonly ILogger<Worker> _logger;
+--
+--    public Worker(ILogger<Worker> logger)
+--    {
+--        _logger = logger;
+--    }
+--
+--    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+--    {
+--        while (!stoppingToken.IsCancellationRequested)
+--        {
+--            if (_logger.IsEnabled(LogLevel.Information))
+--            {
+--                _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+--            }
+--            await Task.Delay(1000, stoppingToken);
+--        }
+--    }
+--}
